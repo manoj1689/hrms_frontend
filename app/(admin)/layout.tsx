@@ -92,6 +92,28 @@ const nav = [
     )
   },
   {
+    href: "/admin/candidates/bulk-upload",
+    label: "Bulk Upload",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M12 16V4m0 0l-4 4m4-4l4 4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        />
+      </svg>
+    )
+  },
+  {
     href: "/admin/profile",
     label: "Profile",
     icon: (

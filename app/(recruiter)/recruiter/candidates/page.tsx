@@ -52,7 +52,10 @@ export default function RecruiterCandidatesPage() {
         <div className="search">
           <input placeholder="Search by name, email or phone" />
         </div>
-        <Link className="btn" href="/recruiter/candidates/add">Add Candidate</Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link className="btn secondary" href="/recruiter/candidates/bulk-upload">Bulk Upload</Link>
+          <Link className="btn" href="/recruiter/candidates/add">Add Candidate</Link>
+        </div>
       </div>
 
       <div className="section">

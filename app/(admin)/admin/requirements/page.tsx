@@ -1,28 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
+import ActionMenu from "../../../components/ActionMenu";
 
 type Requirement = {
   id: number;
   title: string;
+  company_name?: string;
   company_id: number;
   status?: string;
   requirement_date?: string;
 };
 
-type Company = {
-  id: number;
-  name: string;
-};
-
-import ActionMenu from "../../../components/ActionMenu";
-
 export default function RequirementsPage() {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const router = useRouter();
@@ -38,16 +32,7 @@ export default function RequirementsPage() {
         });
     }, 300);
     return () => clearTimeout(timer);
-    api.listCompanies().then(setCompanies).catch(() => setCompanies([]));
   }, [searchTerm]);
-
-  const companyMap = useMemo(() => {
-    const map: Record<number, string> = {};
-    companies.forEach((c) => {
-      map[c.id] = c.name;
-    });
-    return map;
-  }, [companies]);
 
   const refresh = () => {
     setError(null);
@@ -150,7 +135,7 @@ export default function RequirementsPage() {
             {requirements.map((req) => (
               <tr key={req.id}>
                 <td>{req.title}</td>
-                <td>{companyMap[req.company_id] ?? req.company_id}</td>
+                <td>{req.company_name ?? "-"}</td>
                 <td>-</td>
                 <td><span className="badge">{req.status ?? "PENDING"}</span></td>
                 <td>{req.requirement_date ?? "-"}</td>

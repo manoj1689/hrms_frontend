@@ -1,25 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
 
 type Requirement = {
   id: number;
   title: string;
+  company_name?: string;
   company_id: number;
   status?: string;
   requirement_date?: string;
 };
 
-type Company = {
-  id: number;
-  name: string;
-};
-
 export default function RecruiterRequirementsPage() {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const router = useRouter();
 
@@ -28,16 +23,7 @@ export default function RecruiterRequirementsPage() {
       api.listRequirements({ q: searchTerm }).then(setRequirements).catch(() => setRequirements([]));
     }, 300);
     return () => clearTimeout(timer);
-    api.listCompanies().then(setCompanies).catch(() => setCompanies([]));
   }, [searchTerm]);
-
-  const companyMap = useMemo(() => {
-    const map: Record<number, string> = {};
-    companies.forEach((c) => {
-      map[c.id] = c.name;
-    });
-    return map;
-  }, [companies]);
 
   const refresh = () => {
     api.listRequirements({ q: searchTerm }).then(setRequirements).catch(() => setRequirements([]));
@@ -87,7 +73,7 @@ export default function RecruiterRequirementsPage() {
             {requirements.map((req) => (
               <tr key={req.id}>
                 <td>{req.title}</td>
-                <td>{companyMap[req.company_id] ?? req.company_id}</td>
+                <td>{req.company_name ?? "-"}</td>
                 <td>-</td>
                 <td><span className="badge">{req.status ?? "PENDING"}</span></td>
                 <td>{req.requirement_date ?? "-"}</td>

@@ -14,6 +14,7 @@ type Candidate = {
   phone?: string;
   interested_position?: string;
   recruiter_id?: number;
+  recruiter_name?: string;
   current_location?: string;
 };
 
@@ -70,7 +71,7 @@ export default function CandidatesPage() {
       "Email",
       "Phone",
       "Interested Position",
-      "Recruiter ID",
+      "Recruiter",
       "Location"
     ];
     const rows = candidates.map((candidate) => [
@@ -80,7 +81,7 @@ export default function CandidatesPage() {
       candidate.email ?? "",
       candidate.phone ?? "",
       candidate.interested_position ?? "",
-      candidate.recruiter_id ? String(candidate.recruiter_id) : "",
+      candidate.recruiter_name ?? "",
       candidate.current_location ?? ""
     ]);
 
@@ -171,7 +172,7 @@ export default function CandidatesPage() {
                 <td>{c.phone ?? "-"}</td>
                 <td>{c.interested_position ?? "-"}</td>
                 <td><span className="badge">PENDING</span></td>
-                <td>{c.recruiter_id ?? "-"}</td>
+                <td>{c.recruiter_name ?? "-"}</td>
                 <td>
                   <ActionMenu
                     actions={[

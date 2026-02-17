@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
 import { api } from "../../../../lib/api";
 
 type Recruiter = {
@@ -55,6 +57,8 @@ export default function AddCandidatePage() {
     disabilities: "No"
   });
   const [recruiters, setRecruiters] = useState<Recruiter[]>([]);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const calendarRef = useRef<HTMLDivElement>(null);
   const [showAIDialog, setShowAIDialog] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -67,6 +71,35 @@ export default function AddCandidatePage() {
   useEffect(() => {
     api.listRecruiters().then(setRecruiters).catch(() => setRecruiters([]));
   }, []);
+
+  // Close calendar on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
+        setShowCalendar(false);
+      }
+    }
+    if (showCalendar) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showCalendar]);
+
+  const dobDate =
+    form.dob_year && form.dob_month && form.dob_day
+      ? new Date(Number(form.dob_year), Number(form.dob_month) - 1, Number(form.dob_day))
+      : null;
+
+  const dobDisplay =
+    dobDate
+      ? `${form.dob_day.padStart(2, "0")}/${form.dob_month.padStart(2, "0")}/${form.dob_year}`
+      : "";
+
+  function handleDobChange(value: any) {
+    const date = value as Date;
+    update("dob_day", String(date.getDate()));
+    update("dob_month", String(date.getMonth() + 1));
+    update("dob_year", String(date.getFullYear()));
+    setShowCalendar(false);
+  }
 
   function splitList(value: string) {
     return value
@@ -243,17 +276,25 @@ export default function AddCandidatePage() {
               })}
             </select>
           </div>
-          <div className="field">
-            <label>DOB Date</label>
-            <input value={form.dob_day} onChange={(e) => update("dob_day", e.target.value)} placeholder="DD" />
-          </div>
-          <div className="field">
-            <label>DOB Month</label>
-            <input value={form.dob_month} onChange={(e) => update("dob_month", e.target.value)} placeholder="MM" />
-          </div>
-          <div className="field">
-            <label>DOB Year</label>
-            <input value={form.dob_year} onChange={(e) => update("dob_year", e.target.value)} placeholder="YYYY" />
+          <div className="field" ref={calendarRef} style={{ position: "relative" }}>
+            <label>Date of Birth</label>
+            <input
+              value={dobDisplay}
+              readOnly
+              onClick={() => setShowCalendar((v) => !v)}
+              placeholder="Select date"
+              style={{ cursor: "pointer" }}
+            />
+            {showCalendar && (
+              <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 100, marginTop: 4 }}>
+                <Calendar
+                  onChange={handleDobChange}
+                  value={dobDate}
+                  maxDate={new Date()}
+                  defaultView="decade"
+                />
+              </div>
+            )}
           </div>
           <div className="field">
             <label>Gender</label>

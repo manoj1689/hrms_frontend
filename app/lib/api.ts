@@ -46,7 +46,7 @@ export const api = {
   adminMetrics: () => request("/metrics/admin"),
   recruiterMetrics: () => request("/metrics/recruiter"),
   listCompanies: (params?: Record<string, string>) =>
-    request(`/companies${buildQuery(params)}`),
+    request<{ id: number; name: string }[]>(`/companies${buildQuery(params)}`),
   getCompany: (id: number) => request(`/companies/${id}`),
   createCompany: (payload: unknown) =>
     request("/companies", { method: "POST", body: JSON.stringify(payload) }),
@@ -54,7 +54,7 @@ export const api = {
     request(`/companies/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteCompany: (id: number) => request(`/companies/${id}`, { method: "DELETE" }),
   listRequirements: (params?: Record<string, string>) =>
-    request(`/requirements${buildQuery(params)}`),
+    request<{ id: number; title: string; company_id: number; status?: string; requirement_date?: string }[]>(`/requirements${buildQuery(params)}`),
   getRequirement: (id: number) => request(`/requirements/${id}`),
   createRequirement: (payload: unknown) =>
     request("/requirements", { method: "POST", body: JSON.stringify(payload) }),
@@ -119,5 +119,36 @@ export const api = {
   updateMe: (payload: unknown) =>
     request("/users/me", { method: "PUT", body: JSON.stringify(payload) }),
   changePassword: (payload: unknown) =>
-    request("/users/me/password", { method: "PUT", body: JSON.stringify(payload) })
+    request("/users/me/password", { method: "PUT", body: JSON.stringify(payload) }),
+
+  // Bulk upload
+  bulkUploadResumes: async (files: File[]) => {
+    const token = getToken();
+    const formData = new FormData();
+    files.forEach((f) => formData.append("files", f));
+
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/ai-tools/bulk-upload`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || res.statusText);
+    }
+    return res.json();
+  },
+  listBulkJobs: () => request<{ id: number; status: string; total_files: number; processed: number; failed_count: number; total_cost_usd: string; created_at: string }[]>("/ai-tools/bulk-upload"),
+  getBulkJobStatus: (jobId: number) => request<{
+    id: number; status: string; total_files: number; processed: number;
+    failed_count: number; file_names: string[]; results: any[];
+    total_cost_usd: string; created_at: string;
+  }>(`/ai-tools/bulk-upload/${jobId}`),
+  pauseBulkJob: (jobId: number) =>
+    request(`/ai-tools/bulk-upload/${jobId}/pause`, { method: "PATCH" }),
+  resumeBulkJob: (jobId: number) =>
+    request(`/ai-tools/bulk-upload/${jobId}/resume`, { method: "PATCH" }),
 };
