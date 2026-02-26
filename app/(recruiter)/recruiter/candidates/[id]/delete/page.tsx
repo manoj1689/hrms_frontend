@@ -26,7 +26,7 @@ export default function RecruiterDeleteCandidatePage() {
     setError(null);
     api
       .getCandidate(id)
-      .then(setCandidate)
+      .then((data) => setCandidate(data as Candidate))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load candidate"))
       .finally(() => setLoading(false));
   }, [params.id]);

@@ -21,7 +21,7 @@ export default function RecruiterCandidatesPage() {
   const router = useRouter();
 
   useEffect(() => {
-    api.listCandidates().then(setCandidates).catch(() => setCandidates([]));
+    api.listCandidates().then((items) => setCandidates(items as Candidate[])).catch(() => setCandidates([]));
   }, []);
 
   const handleAction = (action: string, id: number) => {

@@ -28,7 +28,7 @@ export default function CandidatesPage() {
     const timer = setTimeout(() => {
       api
         .listCandidates({ q: searchTerm })
-        .then(setCandidates)
+        .then((items) => setCandidates(items as Candidate[]))
         .catch(() => {
           setCandidates([]);
           setError("Failed to load candidates.");
@@ -41,7 +41,7 @@ export default function CandidatesPage() {
     setError(null);
     api
       .listCandidates({ q: searchTerm })
-      .then(setCandidates)
+      .then((items) => setCandidates(items as Candidate[]))
       .catch(() => {
         setCandidates([]);
         setError("Failed to load candidates.");

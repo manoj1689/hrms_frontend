@@ -69,8 +69,8 @@ export default function CandidateDetailsPage() {
     setError(null);
     Promise.all([api.getCandidate(id), api.listRecruiters()])
       .then(([cand, recs]) => {
-        setCandidate(cand);
-        setRecruiters(recs);
+        setCandidate(cand as Candidate);
+        setRecruiters(recs as Recruiter[]);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load candidate"))
       .finally(() => setLoading(false));

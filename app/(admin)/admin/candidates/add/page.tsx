@@ -69,7 +69,10 @@ export default function AddCandidatePage() {
   }
 
   useEffect(() => {
-    api.listRecruiters().then(setRecruiters).catch(() => setRecruiters([]));
+    api
+      .listRecruiters()
+      .then((recs) => setRecruiters(recs as Recruiter[]))
+      .catch(() => setRecruiters([]));
   }, []);
 
   // Close calendar on outside click

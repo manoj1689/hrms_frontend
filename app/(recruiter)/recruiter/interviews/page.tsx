@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "../../../lib/api";
 
@@ -12,7 +12,7 @@ type Interview = {
   mode?: string;
 };
 
-export default function RecruiterInterviewsPage() {
+function RecruiterInterviewsPageContent() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [filter, setFilter] = useState("all");
   const [candidates, setCandidates] = useState<{ id: number; name: string }[]>([]);
@@ -249,5 +249,13 @@ export default function RecruiterInterviewsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function RecruiterInterviewsPage() {
+  return (
+    <Suspense fallback={<div className="section">Loading interviews...</div>}>
+      <RecruiterInterviewsPageContent />
+    </Suspense>
   );
 }
