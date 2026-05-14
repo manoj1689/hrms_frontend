@@ -1,11 +1,22 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+type BulkUploadResult = {
+  file_name: string;
+  status: string;
+  candidate_name?: string;
+  email?: string;
+  error?: string;
+  warnings?: string[];
+  is_new?: boolean;
+  token_usage?: { total_cost_usd: number };
+};
+
 function getToken() {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("hrms_token");
 }
 
-async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -141,10 +152,29 @@ export const api = {
     }
     return res.json();
   },
+  bulkUploadCandidatesCsv: async (file: File) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/ai-tools/bulk-upload-csv`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || res.statusText);
+    }
+    return res.json();
+  },
   listBulkJobs: () => request<{ id: number; status: string; total_files: number; processed: number; failed_count: number; total_cost_usd: string; created_at: string }[]>("/ai-tools/bulk-upload"),
   getBulkJobStatus: (jobId: number) => request<{
     id: number; status: string; total_files: number; processed: number;
-    failed_count: number; file_names: string[]; results: any[];
+    failed_count: number; file_names: string[]; results: BulkUploadResult[];
     total_cost_usd: string; created_at: string;
   }>(`/ai-tools/bulk-upload/${jobId}`),
   pauseBulkJob: (jobId: number) =>

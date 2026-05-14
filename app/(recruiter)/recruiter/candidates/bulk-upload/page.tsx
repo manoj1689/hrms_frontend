@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "../../../../lib/api";
 
+type UploadMode = "pdf" | "csv";
+
 type JobStatus = {
   id: number;
   status: string;
@@ -42,8 +44,14 @@ function Spinner({ size = 20 }: { size?: number }) {
   );
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function RecruiterBulkUploadPage() {
+  const [mode, setMode] = useState<UploadMode>("pdf");
   const [files, setFiles] = useState<File[]>([]);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [jobId, setJobId] = useState<number | null>(null);
@@ -52,13 +60,11 @@ export default function RecruiterBulkUploadPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Restore job_id from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem("bulk_upload_job_id");
     if (saved) setJobId(Number(saved));
   }, []);
 
-  // Poll for job status
   useEffect(() => {
     if (!jobId) return;
 
@@ -86,21 +92,57 @@ export default function RecruiterBulkUploadPage() {
     };
   }, [jobId]);
 
+  const resetSelection = useCallback(() => {
+    setFiles([]);
+    setCsvFile(null);
+    setIsDragging(false);
+  }, []);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const dropped = Array.from(e.dataTransfer.files).filter((f) =>
-      f.name.toLowerCase().endsWith(".pdf")
-    );
-    setFiles((prev) => [...prev, ...dropped]);
-  }, []);
+    const dropped = Array.from(e.dataTransfer.files);
+
+    if (mode === "csv") {
+      const selectedCsv = dropped.find((f) => f.name.toLowerCase().endsWith(".csv"));
+      if (!selectedCsv) {
+        setError("Only CSV files are supported in CSV import mode");
+        return;
+      }
+      setCsvFile(selectedCsv);
+      return;
+    }
+
+    const pdfFiles = dropped.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
+    if (pdfFiles.length !== dropped.length) {
+      setError("Only PDF files are supported in PDF mode");
+    }
+    setFiles((prev) => [...prev, ...pdfFiles]);
+  }, [mode]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const selected = Array.from(e.target.files).filter((f) =>
-      f.name.toLowerCase().endsWith(".pdf")
-    );
-    setFiles((prev) => [...prev, ...selected]);
+    const selected = Array.from(e.target.files);
+
+    if (mode === "csv") {
+      const file = selected[0];
+      if (!file || !file.name.toLowerCase().endsWith(".csv")) {
+        setError("Only CSV files are supported in CSV import mode");
+      } else {
+        setCsvFile(file);
+        setError(null);
+      }
+      e.target.value = "";
+      return;
+    }
+
+    const pdfFiles = selected.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
+    if (pdfFiles.length !== selected.length) {
+      setError("Only PDF files are supported in PDF mode");
+    } else {
+      setError(null);
+    }
+    setFiles((prev) => [...prev, ...pdfFiles]);
     e.target.value = "";
   };
 
@@ -109,16 +151,18 @@ export default function RecruiterBulkUploadPage() {
   };
 
   const startUpload = async () => {
-    if (files.length === 0) return;
     setUploading(true);
     setError(null);
     try {
-      const res = await api.bulkUploadResumes(files);
+      const res =
+        mode === "csv"
+          ? await api.bulkUploadCandidatesCsv(csvFile as File)
+          : await api.bulkUploadResumes(files);
       setJobId(res.job_id);
       localStorage.setItem("bulk_upload_job_id", String(res.job_id));
-      setFiles([]);
-    } catch (e: any) {
-      setError(e.message || "Upload failed");
+      resetSelection();
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Upload failed"));
     } finally {
       setUploading(false);
     }
@@ -128,8 +172,8 @@ export default function RecruiterBulkUploadPage() {
     if (!jobId) return;
     try {
       await api.pauseBulkJob(jobId);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to pause upload"));
     }
   };
 
@@ -137,20 +181,28 @@ export default function RecruiterBulkUploadPage() {
     if (!jobId) return;
     try {
       await api.resumeBulkJob(jobId);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to resume upload"));
     }
   };
 
   const startNew = () => {
     setJobId(null);
     setJob(null);
-    setFiles([]);
+    resetSelection();
     setError(null);
     localStorage.removeItem("bulk_upload_job_id");
   };
 
+  const switchMode = (nextMode: UploadMode) => {
+    if (jobId) return;
+    setMode(nextMode);
+    resetSelection();
+    setError(null);
+  };
+
   const progressPct = job ? Math.round((job.processed / job.total_files) * 100) : 0;
+  const hasSelection = mode === "csv" ? Boolean(csvFile) : files.length > 0;
 
   return (
     <div>
@@ -162,7 +214,9 @@ export default function RecruiterBulkUploadPage() {
             </Link>{" "}
             / Bulk Upload
           </div>
-          <h2 style={{ margin: 0 }}>Bulk Resume Upload</h2>
+          <h2 style={{ margin: 0 }}>
+            {mode === "csv" ? "Bulk Candidate Import" : "Bulk Resume Upload"}
+          </h2>
         </div>
         {job && (job.status === "completed" || job.status === "failed") && (
           <button className="btn" onClick={startNew}>
@@ -193,9 +247,25 @@ export default function RecruiterBulkUploadPage() {
           </div>
         )}
 
-        {/* Upload Zone — show when no active job */}
         {!jobId && (
           <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <button
+                className={mode === "pdf" ? "btn" : "btn secondary"}
+                onClick={() => switchMode("pdf")}
+                type="button"
+              >
+                PDF Resumes
+              </button>
+              <button
+                className={mode === "csv" ? "btn" : "btn secondary"}
+                onClick={() => switchMode("csv")}
+                type="button"
+              >
+                CSV Candidates
+              </button>
+            </div>
+
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -218,21 +288,25 @@ export default function RecruiterBulkUploadPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf"
-                multiple
+                accept={mode === "csv" ? ".csv" : ".pdf"}
+                multiple={mode === "pdf"}
                 onChange={handleFileSelect}
                 style={{ display: "none" }}
               />
               <div style={{ fontSize: 40, marginBottom: 8 }}>+</div>
               <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
-                Drop PDF resumes here or click to browse
+                {mode === "csv"
+                  ? "Drop a CSV file here or click to browse"
+                  : "Drop PDF resumes here or click to browse"}
               </div>
               <div style={{ color: "var(--muted)", fontSize: 13 }}>
-                Supports multiple PDF files
+                {mode === "csv"
+                  ? "Imports your CSV and creates only new candidates"
+                  : "Supports multiple PDF files"}
               </div>
             </div>
 
-            {files.length > 0 && (
+            {hasSelection && (
               <>
                 <div
                   style={{
@@ -243,12 +317,15 @@ export default function RecruiterBulkUploadPage() {
                   }}
                 >
                   <span style={{ fontWeight: 600 }}>
-                    {files.length} file{files.length > 1 ? "s" : ""} selected
+                    {mode === "csv"
+                      ? csvFile?.name
+                      : `${files.length} file${files.length > 1 ? "s" : ""} selected`}
                   </span>
                   <button
                     className="btn"
                     onClick={startUpload}
                     disabled={uploading}
+                    type="button"
                     style={{ display: "flex", alignItems: "center", gap: 8 }}
                   >
                     {uploading && <Spinner size={16} />}
@@ -256,9 +333,8 @@ export default function RecruiterBulkUploadPage() {
                   </button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {files.map((f, i) => (
+                  {mode === "csv" && csvFile ? (
                     <div
-                      key={i}
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
@@ -269,9 +345,10 @@ export default function RecruiterBulkUploadPage() {
                         fontSize: 14,
                       }}
                     >
-                      <span>{f.name}</span>
+                      <span>{csvFile.name}</span>
                       <button
-                        onClick={() => removeFile(i)}
+                        onClick={() => setCsvFile(null)}
+                        type="button"
                         style={{
                           background: "none",
                           border: "none",
@@ -283,17 +360,45 @@ export default function RecruiterBulkUploadPage() {
                         x
                       </button>
                     </div>
-                  ))}
+                  ) : (
+                    files.map((f, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "8px 12px",
+                          background: "#f9fafb",
+                          borderRadius: 8,
+                          fontSize: 14,
+                        }}
+                      >
+                        <span>{f.name}</span>
+                        <button
+                          onClick={() => removeFile(i)}
+                          type="button"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "var(--danger)",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          x
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </>
             )}
           </>
         )}
 
-        {/* Job Progress */}
         {job && (
           <div>
-            {/* Progress bar */}
             <div
               style={{
                 display: "flex",
@@ -344,11 +449,11 @@ export default function RecruiterBulkUploadPage() {
               />
             </div>
 
-            {/* Pause / Resume buttons */}
             {job.status === "processing" && (
               <button
                 className="btn secondary"
                 onClick={handlePause}
+                type="button"
                 style={{ marginBottom: 16 }}
               >
                 Pause
@@ -358,19 +463,19 @@ export default function RecruiterBulkUploadPage() {
               <button
                 className="btn"
                 onClick={handleResume}
+                type="button"
                 style={{ marginBottom: 16 }}
               >
                 Resume
               </button>
             )}
 
-            {/* Results table */}
             {job.results && job.results.length > 0 && (
               <table className="table">
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>File</th>
+                    <th>Source</th>
                     <th>Status</th>
                     <th>Candidate</th>
                     <th>Email</th>
@@ -378,73 +483,63 @@ export default function RecruiterBulkUploadPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {job.results.map((r, i) => (
-                    <React.Fragment key={i}>
-                      <tr>
-                        <td>{i + 1}</td>
-                        <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {r.file_name}
-                        </td>
-                        <td>
-                          <span
-                            className="badge"
-                            style={{
-                              background:
-                                r.status === "success"
-                                  ? r.is_new === false
+                  {job.results.map((r, i) => {
+                    const isDuplicate = r.status === "skipped" || (r.status === "success" && r.is_new === false);
+                    const isSuccess = r.status === "success";
+                    return (
+                      <React.Fragment key={i}>
+                        <tr>
+                          <td>{i + 1}</td>
+                          <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {r.file_name}
+                          </td>
+                          <td>
+                            <span
+                              className="badge"
+                              style={{
+                                background: isSuccess
+                                  ? "var(--primary-light, #d1fae5)"
+                                  : isDuplicate
                                     ? "#fef3c7"
-                                    : "var(--primary-light, #d1fae5)"
-                                  : "var(--danger-light, #fee2e2)",
-                              color:
-                                r.status === "success"
-                                  ? r.is_new === false
+                                    : "var(--danger-light, #fee2e2)",
+                                color: isSuccess
+                                  ? "var(--primary)"
+                                  : isDuplicate
                                     ? "#92400e"
-                                    : "var(--primary)"
-                                  : "var(--danger)",
-                            }}
-                          >
-                            {r.status === "success" && r.is_new === false
-                              ? "DUPLICATE"
-                              : r.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>{r.candidate_name || "-"}</td>
-                        <td>{r.email || "-"}</td>
-                        <td>
-                          {r.token_usage
-                            ? `$${r.token_usage.total_cost_usd}`
-                            : "-"}
-                        </td>
-                      </tr>
-                      {/* Error row */}
-                      {r.error && (
-                        <tr key={`${i}-err`}>
-                          <td colSpan={6} style={{ padding: "4px 12px", background: "#fee2e2", color: "var(--danger)", fontSize: 12, borderTop: "none" }}>
-                            Error: {r.error}
+                                    : "var(--danger)",
+                              }}
+                            >
+                              {isDuplicate ? "SKIPPED" : r.status.toUpperCase()}
+                            </span>
                           </td>
+                          <td>{r.candidate_name || "-"}</td>
+                          <td>{r.email || "-"}</td>
+                          <td>{r.token_usage ? `$${r.token_usage.total_cost_usd}` : "-"}</td>
                         </tr>
-                      )}
-                      {/* Warnings row */}
-                      {r.warnings && r.warnings.length > 0 && (
-                        <tr key={`${i}-warn`}>
-                          <td colSpan={6} style={{ padding: "4px 12px", background: "#fef3c7", color: "#92400e", fontSize: 12, borderTop: "none" }}>
-                            {r.warnings.join(" | ")}
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
+                        {r.error && (
+                          <tr key={`${i}-err`}>
+                            <td colSpan={6} style={{ padding: "4px 12px", background: "#fee2e2", color: "var(--danger)", fontSize: 12, borderTop: "none" }}>
+                              Error: {r.error}
+                            </td>
+                          </tr>
+                        )}
+                        {r.warnings && r.warnings.length > 0 && (
+                          <tr key={`${i}-warn`}>
+                            <td colSpan={6} style={{ padding: "4px 12px", background: "#fef3c7", color: "#92400e", fontSize: 12, borderTop: "none" }}>
+                              {r.warnings.join(" | ")}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
 
-            {/* Pending files */}
             {job.processed < job.total_files && job.file_names && (
               <div style={{ marginTop: 16, color: "var(--muted)", fontSize: 13 }}>
-                <strong>Pending:</strong>{" "}
-                {job.file_names
-                  .slice(job.processed)
-                  .join(", ")}
+                <strong>Pending:</strong> {job.file_names.slice(job.processed).join(", ")}
               </div>
             )}
           </div>
@@ -453,7 +548,9 @@ export default function RecruiterBulkUploadPage() {
 
       <style jsx global>{`
         @keyframes spin {
-          to { transform: rotate(360deg); }
+          to {
+            transform: rotate(360deg);
+          }
         }
       `}</style>
     </div>
